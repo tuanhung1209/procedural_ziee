@@ -1,4 +1,4 @@
-const c = @cImport({
+pub const c = @cImport({
     @cDefine("GLFW_INCLUDE_VULKAN", {});
     @cInclude("GLFW/glfw3.h");
 });
@@ -20,11 +20,14 @@ pub const GlfwWindow = struct {
         return true;
     }
 
-    pub fn run(self: *GlfwWindow) void {
-        const window = self.handle orelse return;
-        while (c.glfwWindowShouldClose(window) == c.GLFW_FALSE) {
-            c.glfwPollEvents();
-        }
+    pub fn pollEvent(self: *GlfwWindow) void {
+        _ = self;
+        c.glfwPollEvents();
+    }
+
+    pub fn shouldClose(self: *GlfwWindow) bool {
+        const window = self.handle orelse return true;
+        return (c.glfwWindowShouldClose(window) != c.GLFW_FALSE);
     }
 
     pub fn deinit(self: *GlfwWindow) void {

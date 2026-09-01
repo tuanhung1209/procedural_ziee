@@ -1,5 +1,7 @@
 const GlfwWindow = @import("glfw_window.zig").GlfwWindow;
 
+const c = @import("glfw_window.zig").c;
+
 pub const TreeApp = struct {
     window: GlfwWindow = .{},
 
@@ -8,7 +10,15 @@ pub const TreeApp = struct {
     }
 
     pub fn run(self: *TreeApp) void {
-        self.window.run();
+        while (!self.window.shouldClose()) {
+            self.window.pollEvent();
+
+            if (c.glfwGetKey(self.window.handle, c.GLFW_KEY_Q) == c.GLFW_PRESS) {
+                c.glfwSetWindowShouldClose(self.window.handle, c.GLFW_TRUE);
+            }
+
+            // self.update, self.render here
+        }
     }
 
     pub fn shutdown(self: *TreeApp) void {
