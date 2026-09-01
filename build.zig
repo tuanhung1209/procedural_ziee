@@ -4,17 +4,25 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = b.path("src/c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    translate_c.linkSystemLibrary("glfw", .{});
+
     const exe = b.addExecutable(.{
         .name = "procedural_ziee",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
+            .imports = &.{.{ .name = "c", .module = translate_c.createModule() }},
             .target = target,
             .optimize = optimize,
             .link_libc = true,
         }),
     });
 
-    exe.root_module.linkSystemLibrary("glfw", .{});
     exe.root_module.linkSystemLibrary("vulkan", .{});
 
     b.installArtifact(exe);
