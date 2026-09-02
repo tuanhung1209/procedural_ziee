@@ -1,12 +1,19 @@
 const GlfwWindow = @import("glfw_window.zig").GlfwWindow;
+const VulkanInstance = @import("vulkan_instance.zig").VulkanInstance;
 
 const c = @import("glfw_window.zig").c;
 
 pub const TreeApp = struct {
     window: GlfwWindow = .{},
+    vk_instance: VulkanInstance = .{},
 
     pub fn init(self: *TreeApp) bool {
-        return self.window.init();
+        if (!self.window.init()) return false;
+        if (!self.vk_instance.init()) {
+            self.window.deinit();
+            return false;
+        }
+        return true;
     }
 
     pub fn run(self: *TreeApp) void {
@@ -22,6 +29,7 @@ pub const TreeApp = struct {
     }
 
     pub fn shutdown(self: *TreeApp) void {
+        self.vk_instance.deinit();
         self.window.deinit();
     }
 };
