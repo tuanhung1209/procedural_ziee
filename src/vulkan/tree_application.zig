@@ -1,3 +1,4 @@
+const std = @import("std");
 const GlfwWindow = @import("glfw_window.zig").GlfwWindow;
 const VulkanInstance = @import("vulkan_instance.zig").VulkanInstance;
 
@@ -7,12 +8,14 @@ pub const TreeApp = struct {
     window: GlfwWindow = .{},
     vk_instance: VulkanInstance = .{},
 
-    pub fn init(self: *TreeApp) bool {
+    pub fn init(self: *TreeApp, allocator: std.mem.Allocator) bool {
         if (!self.window.init()) return false;
-        if (!self.vk_instance.init()) {
+
+        if (!self.vk_instance.init(allocator)) {
             self.window.deinit();
             return false;
         }
+
         return true;
     }
 
