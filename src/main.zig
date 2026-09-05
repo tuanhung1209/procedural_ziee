@@ -10,5 +10,5 @@ pub fn main() !void {
     if (app.init(allocator)) {
         app.run();
     }
-    app.shutdown();
+    app.deinit();
 }

@@ -31,7 +31,7 @@ pub const TreeApp = struct {
         }
     }
 
-    pub fn shutdown(self: *TreeApp) void {
+    pub fn deinit(self: *TreeApp) void {
         self.vk_instance.deinit();
         self.window.deinit();
     }

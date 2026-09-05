@@ -18,24 +18,12 @@ pub const VulkanInstance = struct {
     pub fn init(self: *VulkanInstance, allocator: std.mem.Allocator) bool {
         self.allocator = allocator;
 
-        var count: u32 = 0;
-        const glfw_exts = c.glfwGetRequiredInstanceExtensions(&count);
-        if (glfw_exts == null) return false;
+        if (!self.collectExtensions()) return false;
+        if (!self.createInstance()) {
+            self.deinit();
+            return false;
+        }
 
-        const exts = allocator.alloc([*c]const u8, count) catch return false;
-        for (exts, glfw_exts[0..count]) |*e, ext| e.* = ext;
-        self.extension_names = exts;
-
-        const create_info = c.VkInstanceCreateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-            .pApplicationInfo = &self.app_info,
-            .enabledExtensionCount = count,
-            .ppEnabledExtensionNames = @ptrCast(exts.ptr),
-        };
-
-        var instance: c.VkInstance = null;
-        if (c.vkCreateInstance(&create_info, null, &instance) != c.VK_SUCCESS) return false;
-        self.handle = instance;
         return true;
     }
 
@@ -48,5 +36,37 @@ pub const VulkanInstance = struct {
             self.allocator.free(self.extension_names);
             self.extension_names = &.{};
         }
+    }
+
+    // helper function bellow
+    fn collectExtensions(self: *VulkanInstance) bool {
+        var count: u32 = 0;
+        const glfw_exts = c.glfwGetRequiredInstanceExtensions(&count);
+        if (glfw_exts == null) return false;
+
+        var exts: std.ArrayList([*c]const u8) = .empty;
+        defer exts.deinit(self.allocator);
+
+        //  might have to have argv for debug stuff
+        exts.append(self.allocator, c.VK_EXT_DEBUG_UTILS_EXTENSION_NAME) catch return false;
+        for (glfw_exts[0..count]) |ext| exts.append(self.allocator, ext) catch return false;
+
+        for (exts.items) |ext| std.debug.print("{s}\n", .{ext});
+        self.extension_names = exts.toOwnedSlice(self.allocator) catch return false;
+        return true;
+    }
+
+    fn createInstance(self: *VulkanInstance) bool {
+        const create_info = c.VkInstanceCreateInfo{
+            .sType = c.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+            .pApplicationInfo = &self.app_info,
+            .enabledExtensionCount = @intCast(self.extension_names.len),
+            .ppEnabledExtensionNames = @ptrCast(self.extension_names.ptr),
+        };
+
+        var instance: c.VkInstance = undefined;
+        if (c.vkCreateInstance(&create_info, null, &instance) != c.VK_SUCCESS) return false;
+        self.handle = instance;
+        return true;
     }
 };
