@@ -6,6 +6,9 @@ pub const VulkanInstance = struct {
     allocator: std.mem.Allocator = undefined,
     extension_names: []const [*c]const u8 = &.{},
 
+    // might not need this
+    debug_messenger: c.VkDebugUtilsMessengerEXT,
+
     app_info: c.VkApplicationInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = "Procedural Ziee",
@@ -36,6 +39,9 @@ pub const VulkanInstance = struct {
             self.allocator.free(self.extension_names);
             self.extension_names = &.{};
         }
+        if (self.debug_messenger != null) {
+            self.debug_messenger = null;
+        }
     }
 
     // helper function bellow
@@ -53,6 +59,23 @@ pub const VulkanInstance = struct {
 
         for (exts.items) |ext| std.debug.print("{s}\n", .{ext});
         self.extension_names = exts.toOwnedSlice(self.allocator) catch return false;
+        return true;
+    }
+
+    // TODO :
+    fn debugCallback() bool {}
+
+    fn createDebugLayer(self: *VulkanInstance) bool {
+        const debug_info = c.VkDebugUtilsMessengerCreateInfoEXT{
+            .sType = c.VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+            .messageSeverity = c.VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | c.VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | c.VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+            .messageType = c.VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | c.VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+            .pfnUserCallback = debugCallback,
+        };
+
+        var debug_messenger: c.VkDebugUtilsMessengerEXT = undefined;
+        if (c.vkCreateDebugUtilsMessengerEXT(self.handle, &debug_info, null, &debug_messenger) != c.VK_SUCCESS) return false;
+        self.debug_messenger = debug_messenger;
         return true;
     }
 
