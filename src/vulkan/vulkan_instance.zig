@@ -4,20 +4,11 @@ const c = @import("glfw_window.zig").c;
 const enable_validation = true;
 const validation_layers = [_][*c]const u8{"VK_LAYER_KHRONOS_validation"};
 
-fn debugCallback(
-    severity: c.VkDebugUtilsMessageSeverityFlagBitsEXT,
-    _: c.VkDebugUtilsMessageTypeFlagsEXT,
-    callback_data: [*c]const c.VkDebugUtilsMessengerCallbackDataEXT,
-    _: ?*anyopaque,
-) callconv(.c) c.VkBool32 {
-    if (severity >= c.VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        std.debug.print("[vulkan] {s}\n", .{std.mem.span(callback_data.*.pMessage)});
-    }
-    return c.VK_FALSE;
-}
-
 pub const VulkanInstance = struct {
+    const Self = @This();
+
     handle: ?c.VkInstance = null,
+
     allocator: std.mem.Allocator = undefined,
     extension_names: []const [*c]const u8 = &.{},
     debug_messenger: c.VkDebugUtilsMessengerEXT = null,
@@ -31,7 +22,7 @@ pub const VulkanInstance = struct {
         .apiVersion = c.VK_API_VERSION_1_3,
     },
 
-    pub fn init(self: *VulkanInstance, allocator: std.mem.Allocator) bool {
+    pub fn init(self: *Self, allocator: std.mem.Allocator) bool {
         self.allocator = allocator;
 
         if (!self.collectExtensions()) return false;
@@ -47,7 +38,26 @@ pub const VulkanInstance = struct {
         return true;
     }
 
-    fn collectExtensions(self: *VulkanInstance) bool {
+    pub fn deinit(self: *Self) void {
+        if (self.handle) |instance| {
+            if (self.debug_messenger) |messenger| {
+                const proc = c.glfwGetInstanceProcAddress(instance, "vkDestroyDebugUtilsMessengerEXT");
+                if (proc) |p| {
+                    const destroy_fn: c.PFN_vkDestroyDebugUtilsMessengerEXT = @ptrCast(p);
+                    destroy_fn.?(instance, messenger, null);
+                }
+                self.debug_messenger = null;
+            }
+            c.vkDestroyInstance(instance, null);
+            self.handle = null;
+        }
+        if (self.extension_names.len > 0) {
+            self.allocator.free(self.extension_names);
+            self.extension_names = &.{};
+        }
+    }
+
+    fn collectExtensions(self: *Self) bool {
         var count: u32 = 0;
         const glfw_exts = c.glfwGetRequiredInstanceExtensions(&count);
         if (glfw_exts == null) return false;
@@ -60,7 +70,7 @@ pub const VulkanInstance = struct {
         return true;
     }
 
-    fn createInstance(self: *VulkanInstance) bool {
+    fn createInstance(self: *Self) bool {
         var debug_info: c.VkDebugUtilsMessengerCreateInfoEXT = undefined;
         var layer_count: u32 = 0;
         var layer_names: [*c]const [*c]const u8 = null;
@@ -87,7 +97,7 @@ pub const VulkanInstance = struct {
         return true;
     }
 
-    fn createDebugMessenger(self: *VulkanInstance) bool {
+    fn createDebugMessenger(self: *Self) bool {
         const instance = self.handle orelse return false;
 
         const proc = c.glfwGetInstanceProcAddress(instance, "vkCreateDebugUtilsMessengerEXT");
@@ -101,7 +111,7 @@ pub const VulkanInstance = struct {
         return true;
     }
 
-    fn debugCreateInfo(self: *VulkanInstance) c.VkDebugUtilsMessengerCreateInfoEXT {
+    fn debugCreateInfo(self: *Self) c.VkDebugUtilsMessengerCreateInfoEXT {
         _ = self;
         return .{
             .sType = c.VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -113,23 +123,16 @@ pub const VulkanInstance = struct {
             .pfnUserCallback = debugCallback,
         };
     }
-
-    pub fn deinit(self: *VulkanInstance) void {
-        if (self.handle) |instance| {
-            if (self.debug_messenger) |messenger| {
-                const proc = c.glfwGetInstanceProcAddress(instance, "vkDestroyDebugUtilsMessengerEXT");
-                if (proc) |p| {
-                    const destroy_fn: c.PFN_vkDestroyDebugUtilsMessengerEXT = @ptrCast(p);
-                    destroy_fn.?(instance, messenger, null);
-                }
-                self.debug_messenger = null;
-            }
-            c.vkDestroyInstance(instance, null);
-            self.handle = null;
-        }
-        if (self.extension_names.len > 0) {
-            self.allocator.free(self.extension_names);
-            self.extension_names = &.{};
-        }
-    }
 };
+
+fn debugCallback(
+    severity: c.VkDebugUtilsMessageSeverityFlagBitsEXT,
+    _: c.VkDebugUtilsMessageTypeFlagsEXT,
+    callback_data: [*c]const c.VkDebugUtilsMessengerCallbackDataEXT,
+    _: ?*anyopaque,
+) callconv(.c) c.VkBool32 {
+    if (severity >= c.VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        std.debug.print("[vulkan] {s}\n", .{std.mem.span(callback_data.*.pMessage)});
+    }
+    return c.VK_FALSE;
+}

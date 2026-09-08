@@ -3,12 +3,19 @@ pub const c = @cImport({
     @cInclude("GLFW/glfw3.h");
 });
 
+const VulkanInstance = @import("vulkan_instance.zig").VulkanInstance;
+
 pub const GlfwWindow = struct {
+    const Self = @This();
+
     handle: ?*c.GLFWwindow = null,
+
+    vulkan_surface: c.VkSurfaceKHR = null,
+
     width: i32 = 800,
     height: i32 = 600,
 
-    pub fn init(self: *GlfwWindow) bool {
+    pub fn init(self: *Self) bool {
         if (c.glfwInit() == c.GLFW_FALSE) return false;
 
         c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
@@ -20,22 +27,28 @@ pub const GlfwWindow = struct {
         return true;
     }
 
-    pub fn pollEvent(self: *GlfwWindow) void {
-        _ = self;
-        c.glfwPollEvents();
-    }
-
-    pub fn shouldClose(self: *GlfwWindow) bool {
-        const window = self.handle orelse return true;
-        return (c.glfwWindowShouldClose(window) != c.GLFW_FALSE);
-    }
-
-    pub fn deinit(self: *GlfwWindow) void {
+    pub fn deinit(self: *Self, instance: VulkanInstance) void {
+        if (instance.handle) |vk_instance| {
+            if (self.vulkan_surface) |surface| {
+                c.vkDestroySurfaceKHR(vk_instance, surface, null);
+                self.vulkan_surface = null;
+            }
+        }
         if (self.handle) |window| {
             c.glfwDestroyWindow(window);
             self.handle = null;
             c.glfwTerminate();
         }
+    }
+
+    pub fn pollEvent(self: *Self) void {
+        _ = self;
+        c.glfwPollEvents();
+    }
+
+    pub fn shouldClose(self: *Self) bool {
+        const window = self.handle orelse return true;
+        return (c.glfwWindowShouldClose(window) != c.GLFW_FALSE);
     }
 
     pub fn changeResolution(self: *GlfwWindow, n_width: i32, n_height: i32) void {
@@ -44,5 +57,13 @@ pub const GlfwWindow = struct {
         if (self.handle) |window| {
             c.glfwSetWindowSize(window, n_width, n_height);
         }
+    }
+
+    pub fn createVulkanSurface(self: *Self, instance: VulkanInstance) bool {
+        const vk_instance = instance.handle orelse return false;
+        if (c.glfwCreateWindowSurface(vk_instance, self.handle, null, &self.vulkan_surface) != c.VK_SUCCESS) {
+            return false;
+        }
+        return true;
     }
 };

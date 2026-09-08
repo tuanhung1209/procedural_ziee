@@ -12,7 +12,11 @@ pub const TreeApp = struct {
         if (!self.window.init()) return false;
 
         if (!self.vk_instance.init(allocator)) {
-            self.window.deinit();
+            self.window.deinit(self.vk_instance);
+            return false;
+        }
+
+        if (!self.window.createVulkanSurface(self.vk_instance)) {
             return false;
         }
 
@@ -32,7 +36,7 @@ pub const TreeApp = struct {
     }
 
     pub fn deinit(self: *TreeApp) void {
+        self.window.deinit(self.vk_instance);
         self.vk_instance.deinit();
-        self.window.deinit();
     }
 };
