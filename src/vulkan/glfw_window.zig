@@ -3,14 +3,10 @@ pub const c = @cImport({
     @cInclude("GLFW/glfw3.h");
 });
 
-const VulkanInstance = @import("vulkan_instance.zig").VulkanInstance;
-
 pub const GlfwWindow = struct {
     const Self = @This();
 
     handle: ?*c.GLFWwindow = null,
-
-    vulkan_surface: c.VkSurfaceKHR = null,
 
     width: i32 = 800,
     height: i32 = 600,
@@ -27,13 +23,7 @@ pub const GlfwWindow = struct {
         return true;
     }
 
-    pub fn deinit(self: *Self, instance: VulkanInstance) void {
-        if (instance.handle) |vk_instance| {
-            if (self.vulkan_surface) |surface| {
-                c.vkDestroySurfaceKHR(vk_instance, surface, null);
-                self.vulkan_surface = null;
-            }
-        }
+    pub fn deinit(self: *Self) void {
         if (self.handle) |window| {
             c.glfwDestroyWindow(window);
             self.handle = null;
@@ -50,20 +40,11 @@ pub const GlfwWindow = struct {
         const window = self.handle orelse return true;
         return (c.glfwWindowShouldClose(window) != c.GLFW_FALSE);
     }
-
-    pub fn changeResolution(self: *GlfwWindow, n_width: i32, n_height: i32) void {
+    pub fn changeResolution(self: *Self, n_width: i32, n_height: i32) void {
         self.width = n_width;
         self.height = n_height;
         if (self.handle) |window| {
             c.glfwSetWindowSize(window, n_width, n_height);
         }
-    }
-
-    pub fn createVulkanSurface(self: *Self, instance: VulkanInstance) bool {
-        const vk_instance = instance.handle orelse return false;
-        if (c.glfwCreateWindowSurface(vk_instance, self.handle, null, &self.vulkan_surface) != c.VK_SUCCESS) {
-            return false;
-        }
-        return true;
     }
 };

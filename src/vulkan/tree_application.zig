@@ -5,25 +5,27 @@ const VulkanInstance = @import("vulkan_instance.zig").VulkanInstance;
 const c = @import("glfw_window.zig").c;
 
 pub const TreeApp = struct {
+    const Self = @This();
+
     window: GlfwWindow = .{},
     vk_instance: VulkanInstance = .{},
 
-    pub fn init(self: *TreeApp, allocator: std.mem.Allocator) bool {
+    pub fn init(self: *Self, allocator: std.mem.Allocator) bool {
         if (!self.window.init()) return false;
 
         if (!self.vk_instance.init(allocator)) {
-            self.window.deinit(self.vk_instance);
+            self.window.deinit();
             return false;
         }
 
-        if (!self.window.createVulkanSurface(self.vk_instance)) {
+        if (!self.vk_instance.createVulkanSurface(&self.window)) {
             return false;
         }
 
         return true;
     }
 
-    pub fn run(self: *TreeApp) void {
+    pub fn run(self: *Self) void {
         while (!self.window.shouldClose()) {
             self.window.pollEvent();
 
@@ -35,8 +37,8 @@ pub const TreeApp = struct {
         }
     }
 
-    pub fn deinit(self: *TreeApp) void {
-        self.window.deinit(self.vk_instance);
+    pub fn deinit(self: *Self) void {
+        self.window.deinit();
         self.vk_instance.deinit();
     }
 };

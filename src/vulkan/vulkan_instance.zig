@@ -1,6 +1,8 @@
 const std = @import("std");
 const c = @import("glfw_window.zig").c;
 
+const GlfwWindow = @import("glfw_window.zig").GlfwWindow;
+
 const enable_validation = true;
 const validation_layers = [_][*c]const u8{"VK_LAYER_KHRONOS_validation"};
 
@@ -12,6 +14,8 @@ pub const VulkanInstance = struct {
     allocator: std.mem.Allocator = undefined,
     extension_names: []const [*c]const u8 = &.{},
     debug_messenger: c.VkDebugUtilsMessengerEXT = null,
+
+    vulkan_surface: c.VkSurfaceKHR = null,
 
     app_info: c.VkApplicationInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -48,13 +52,28 @@ pub const VulkanInstance = struct {
                 }
                 self.debug_messenger = null;
             }
+            if (self.vulkan_surface) |surface| {
+                c.vkDestroySurfaceKHR(instance, surface, null);
+                self.vulkan_surface = null;
+            }
             c.vkDestroyInstance(instance, null);
             self.handle = null;
         }
+
         if (self.extension_names.len > 0) {
             self.allocator.free(self.extension_names);
             self.extension_names = &.{};
         }
+    }
+
+    pub fn createVulkanSurface(self: *Self, glfwWindow: *GlfwWindow) bool {
+        var vulkan_surface: c.VkSurfaceKHR = null;
+        const handle: c.VkInstance = self.handle orelse return false;
+        if (c.glfwCreateWindowSurface(handle, glfwWindow.handle, null, &vulkan_surface) != c.VK_SUCCESS) {
+            return false;
+        }
+        self.vulkan_surface = vulkan_surface;
+        return true;
     }
 
     fn collectExtensions(self: *Self) bool {
