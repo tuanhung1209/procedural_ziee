@@ -40,6 +40,7 @@ pub const GlfwWindow = struct {
         const window = self.handle orelse return true;
         return (c.glfwWindowShouldClose(window) != c.GLFW_FALSE);
     }
+
     pub fn changeResolution(self: *Self, n_width: i32, n_height: i32) void {
         self.width = n_width;
         self.height = n_height;

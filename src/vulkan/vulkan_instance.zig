@@ -14,6 +14,7 @@ pub const VulkanInstance = struct {
     allocator: std.mem.Allocator = undefined,
     extension_names: []const [*c]const u8 = &.{},
     debug_messenger: c.VkDebugUtilsMessengerEXT = null,
+    physical_device: c.VkPhysicalDevice = null,
 
     vulkan_surface: c.VkSurfaceKHR = null,
 
@@ -39,6 +40,11 @@ pub const VulkanInstance = struct {
             return false;
         }
 
+        if (!self.findPhysicalDevices()) {
+            self.deinit();
+            return false;
+        }
+
         return true;
     }
 
@@ -52,6 +58,11 @@ pub const VulkanInstance = struct {
                 }
                 self.debug_messenger = null;
             }
+
+            if (self.physical_device) |_| {
+                self.physical_device = null;
+            }
+
             if (self.vulkan_surface) |surface| {
                 c.vkDestroySurfaceKHR(instance, surface, null);
                 self.vulkan_surface = null;
@@ -66,6 +77,7 @@ pub const VulkanInstance = struct {
         }
     }
 
+    // public function
     pub fn createVulkanSurface(self: *Self, glfwWindow: *GlfwWindow) bool {
         var vulkan_surface: c.VkSurfaceKHR = null;
         const handle: c.VkInstance = self.handle orelse return false;
@@ -76,6 +88,7 @@ pub const VulkanInstance = struct {
         return true;
     }
 
+    // hepler function
     fn collectExtensions(self: *Self) bool {
         var count: u32 = 0;
         const glfw_exts = c.glfwGetRequiredInstanceExtensions(&count);
@@ -141,6 +154,30 @@ pub const VulkanInstance = struct {
                 c.VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
             .pfnUserCallback = debugCallback,
         };
+    }
+
+    fn findPhysicalDevices(self: *Self) bool {
+        var count: u32 = 0;
+        const handle: c.VkInstance = self.handle orelse return false;
+        if (c.vkEnumeratePhysicalDevices(handle, &count, null) != c.VK_SUCCESS) return false;
+        const devices = self.allocator.alloc(c.VkPhysicalDevice, count) catch return false;
+        if (c.vkEnumeratePhysicalDevices(handle, &count, devices.ptr) != c.VK_SUCCESS) return false;
+
+        var chosen_device: c.VkPhysicalDevice = null;
+
+        chosen_device = devices[0];
+        for (devices) |device| {
+            var prop: c.VkPhysicalDeviceProperties = .{};
+            c.vkGetPhysicalDeviceProperties(device, &prop);
+            if (prop.deviceType == c.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+                chosen_device = device;
+                break;
+            }
+        }
+
+        self.allocator.free(devices);
+        self.physical_device = chosen_device;
+        return true;
     }
 };
 
