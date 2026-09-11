@@ -18,7 +18,9 @@ pub const VulkanInstance = struct {
     physical_device: c.VkPhysicalDevice = null,
     // only graphic family for now
     queue_fam_index: u32 = 0,
-    queue_fam: c.VkQueue = null,
+
+    logical_device: c.VkDevice = null,
+    queue_graphic_fam: c.VkQueue = null,
 
     vulkan_surface: c.VkSurfaceKHR = null,
 
@@ -39,13 +41,18 @@ pub const VulkanInstance = struct {
         if (!self.createDebugMessenger()) return false;
         if (!self.createVulkanSurface(window)) return false;
         if (!self.findPhysicalDevices()) return false;
-        if (!self.pickFamilyQueue()) return false;
+        if (!self.pickFamilyIndexQueue()) return false;
+        if (!self.createLogicalDevice()) return false;
 
         return true;
     }
 
     pub fn deinit(self: *Self) void {
         if (self.handle) |instance| {
+            if (self.logical_device) |device| {
+                c.vkDestroyDevice(device, null);
+                self.logical_device = null;
+            }
             if (self.debug_messenger) |messenger| {
                 const proc = c.glfwGetInstanceProcAddress(instance, "vkDestroyDebugUtilsMessengerEXT");
                 if (proc) |p| {
@@ -176,7 +183,7 @@ pub const VulkanInstance = struct {
         return true;
     }
 
-    fn pickFamilyQueue(self: *Self) bool {
+    fn pickFamilyIndexQueue(self: *Self) bool {
         var count: u32 = 0;
 
         c.vkGetPhysicalDeviceQueueFamilyProperties2(self.physical_device, &count, null);
@@ -195,6 +202,7 @@ pub const VulkanInstance = struct {
 
             const fam_prop: c.VkQueueFamilyProperties2 = family_queues[index];
 
+            // TODO : make sure that graphic and present only belong to 1 family
             const can_graphic: bool = fam_prop.queueFamilyProperties.queueFlags & c.VK_QUEUE_GRAPHICS_BIT != 0;
             const can_present: bool = hasPresentSupport == c.VK_TRUE;
             if (can_graphic and can_present) {
@@ -204,6 +212,80 @@ pub const VulkanInstance = struct {
         }
 
         return false;
+    }
+
+    fn createLogicalDevice(self: *Self) bool {
+        //var feature14: c.VkPhysicalDeviceVulkan14Features = .{
+        //    .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+        //    .pNext = null,
+        //};
+
+        // populate each version feature
+        var feature13: c.VkPhysicalDeviceVulkan13Features = .{
+            .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+            .pNext = null,
+        };
+
+        var feature12: c.VkPhysicalDeviceVulkan12Features = .{
+            .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+            .pNext = &feature13,
+        };
+
+        var supported: c.VkPhysicalDeviceFeatures2 = .{
+            .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+            .pNext = &feature12,
+        };
+
+        c.vkGetPhysicalDeviceFeatures2(self.physical_device, &supported);
+
+        // check required features are supported
+        if ((feature13.dynamicRendering == 0) or
+            (feature13.synchronization2 == 0) or
+            (feature12.timelineSemaphore == 0))
+        {
+            std.debug.print("physical device doesn't have required features\n", .{});
+            return false;
+        }
+
+        // device supports them => request feature
+        feature13.dynamicRendering = c.VK_TRUE;
+        feature13.synchronization2 = c.VK_TRUE;
+        feature12.timelineSemaphore = c.VK_TRUE;
+
+        const queue_priorities = [_]f32{1.0};
+        const queue_create_info: c.VkDeviceQueueCreateInfo = .{
+            .sType = c.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            .queueFamilyIndex = self.queue_fam_index,
+            .queueCount = 1,
+            .pQueuePriorities = &queue_priorities,
+        };
+
+        const logical_device_create_info: c.VkDeviceCreateInfo = .{
+            .sType = c.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+            .pNext = &supported,
+            .queueCreateInfoCount = 1,
+            .pQueueCreateInfos = &queue_create_info,
+            .enabledExtensionCount = 0, // VK_KHR_swapchain in swapchain
+            .ppEnabledExtensionNames = null,
+            .pEnabledFeatures = null,
+        };
+
+        var logical_device: c.VkDevice = null;
+        if (c.vkCreateDevice(self.physical_device, &logical_device_create_info, null, &logical_device) != c.VK_SUCCESS) {
+            std.debug.print("Can't create logical device\n", .{});
+            return false;
+        }
+        self.logical_device = logical_device;
+
+        var graphic_queue: c.VkQueue = null;
+        c.vkGetDeviceQueue(self.logical_device, self.queue_fam_index, 0, &graphic_queue);
+        if (graphic_queue == null) {
+            std.debug.print("Can't get graphics queue\n", .{});
+            return false;
+        }
+        self.queue_graphic_fam = graphic_queue;
+
+        return true;
     }
 };
 
