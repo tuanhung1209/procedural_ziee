@@ -13,12 +13,8 @@ pub const TreeApp = struct {
     pub fn init(self: *Self, allocator: std.mem.Allocator) bool {
         if (!self.window.init()) return false;
 
-        if (!self.vk_instance.init(allocator)) {
+        if (!self.vk_instance.init(allocator, &self.window)) {
             self.window.deinit();
-            return false;
-        }
-
-        if (!self.vk_instance.createVulkanSurface(&self.window)) {
             return false;
         }
 

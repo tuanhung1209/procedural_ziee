@@ -14,7 +14,11 @@ pub const VulkanInstance = struct {
     allocator: std.mem.Allocator = undefined,
     extension_names: []const [*c]const u8 = &.{},
     debug_messenger: c.VkDebugUtilsMessengerEXT = null,
+
     physical_device: c.VkPhysicalDevice = null,
+    // only graphic family for now
+    queue_fam_index: u32 = 0,
+    queue_fam: c.VkQueue = null,
 
     vulkan_surface: c.VkSurfaceKHR = null,
 
@@ -27,23 +31,15 @@ pub const VulkanInstance = struct {
         .apiVersion = c.VK_API_VERSION_1_3,
     },
 
-    pub fn init(self: *Self, allocator: std.mem.Allocator) bool {
+    pub fn init(self: *Self, allocator: std.mem.Allocator, window: *GlfwWindow) bool {
         self.allocator = allocator;
 
         if (!self.collectExtensions()) return false;
-        if (!self.createInstance()) {
-            self.deinit();
-            return false;
-        }
-        if (!self.createDebugMessenger()) {
-            self.deinit();
-            return false;
-        }
-
-        if (!self.findPhysicalDevices()) {
-            self.deinit();
-            return false;
-        }
+        if (!self.createInstance()) return false;
+        if (!self.createDebugMessenger()) return false;
+        if (!self.createVulkanSurface(window)) return false;
+        if (!self.findPhysicalDevices()) return false;
+        if (!self.pickFamilyQueue()) return false;
 
         return true;
     }
@@ -178,6 +174,36 @@ pub const VulkanInstance = struct {
         self.allocator.free(devices);
         self.physical_device = chosen_device;
         return true;
+    }
+
+    fn pickFamilyQueue(self: *Self) bool {
+        var count: u32 = 0;
+
+        c.vkGetPhysicalDeviceQueueFamilyProperties2(self.physical_device, &count, null);
+        const family_queues = self.allocator.alloc(c.VkQueueFamilyProperties2, count) catch return false;
+        for (family_queues) |*queue| {
+            queue.sType = c.VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2;
+            queue.pNext = null;
+        }
+        c.vkGetPhysicalDeviceQueueFamilyProperties2(self.physical_device, &count, family_queues.ptr);
+
+        for (family_queues, 0..) |_, index| {
+            const index32: u32 = @intCast(index);
+            var hasPresentSupport: c.VkBool32 = 0;
+
+            if (c.vkGetPhysicalDeviceSurfaceSupportKHR(self.physical_device, index32, self.vulkan_surface, &hasPresentSupport) != c.VK_SUCCESS) return false;
+
+            const fam_prop: c.VkQueueFamilyProperties2 = family_queues[index];
+
+            const can_graphic: bool = fam_prop.queueFamilyProperties.queueFlags & c.VK_QUEUE_GRAPHICS_BIT != 0;
+            const can_present: bool = hasPresentSupport == c.VK_TRUE;
+            if (can_graphic and can_present) {
+                self.queue_fam_index = index32;
+                return true;
+            }
+        }
+
+        return false;
     }
 };
 
